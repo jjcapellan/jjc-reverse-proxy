@@ -9,7 +9,10 @@ import (
 	"time"
 )
 
+// Proxy manager server
 var Server *http.Server
+
+// Contains all configured reverse proxies. map[route]proxy
 var Proxies map[string]*httputil.ReverseProxy = make(map[string]*httputil.ReverseProxy)
 
 // AddProxy adds and configure one reverse proxy. All request with path prefix "route" will be
@@ -23,19 +26,6 @@ func AddProxy(route string, port string) error {
 	}
 	Proxies[route] = p
 	return nil
-}
-
-func setupServer(portProxy string) *http.Server {
-	http.HandleFunc("/", routesHandler)
-
-	srv := &http.Server{
-		Addr:         ":" + portProxy,
-		Handler:      nil,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
-	}
-
-	return srv
 }
 
 // Start inits the proxy manager server on the given port.
@@ -69,4 +59,17 @@ func routesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	Proxies[route].ServeHTTP(w, r)
+}
+
+func setupServer(portProxy string) *http.Server {
+	http.HandleFunc("/", routesHandler)
+
+	srv := &http.Server{
+		Addr:         ":" + portProxy,
+		Handler:      nil,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+	}
+
+	return srv
 }
