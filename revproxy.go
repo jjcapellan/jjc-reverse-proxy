@@ -12,6 +12,10 @@ import (
 var Server *http.Server
 var Proxies map[string]*httputil.ReverseProxy = make(map[string]*httputil.ReverseProxy)
 
+// AddProxy adds and configure one reverse proxy. All request with path prefix "route" will be
+// redirected to the given port.
+//
+// Example: AddProxy("api", "8084") -> redirects www.site.com:8080/api/user/john to port 8084
 func AddProxy(route string, port string) error {
 	p, err := newProxy("http://localhost:" + port)
 	if err != nil {
@@ -34,6 +38,7 @@ func setupServer(portProxy string) *http.Server {
 	return srv
 }
 
+// Start inits the proxy manager server on the given port.
 func Start(port string) error {
 	Server = setupServer(port)
 	log.Println("Proxy server listening on port ", port)
@@ -60,7 +65,7 @@ func routesHandler(w http.ResponseWriter, r *http.Request) {
 	route := strings.Split(r.URL.Path, "/")[1]
 
 	if _, exist := Proxies[route]; !exist {
-		route = "/" // Must be at one root proxy
+		route = "/" // Must be one root proxy
 	}
 
 	Proxies[route].ServeHTTP(w, r)
