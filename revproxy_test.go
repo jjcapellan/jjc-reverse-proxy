@@ -6,7 +6,6 @@ import (
 	"net/http/httptest"
 	_ "net/http/httptest"
 	"net/url"
-	"sync"
 	"testing"
 )
 
@@ -14,8 +13,8 @@ import (
 
 const host string = "http://localhost"
 const proxyPort string = "8080"
-const apiRoute string = "/api"
-const apiKey string = "abcd"
+const apiRoute string = "api"
+const frontendRoute string = "/"
 
 // Fake client
 var client *http.Client = &http.Client{}
@@ -36,16 +35,11 @@ func buildRequest(path string) *http.Request {
 	return req
 }
 
-func TestInit(t *testing.T) {
+func TestStart(t *testing.T) {
 
 	// Api fake server
 	apiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
-		if r.Header.Get("x-api-key") != apiKey {
-			t.Error("Wrong x-api-key header")
-		}
 		w.Write([]byte("apiServer"))
-
 	}))
 	apiUrl, _ := url.Parse(apiServer.URL)
 	apiPort := apiUrl.Port()
@@ -61,22 +55,12 @@ func TestInit(t *testing.T) {
 
 	// Reverse proxy
 
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	c := Config{
-		PortProxy:    proxyPort,
-		PortApi:      apiPort,
-		PortFrontend: frontendPort,
-		ApiRoute:     apiRoute,
-		ApiKey:       apiKey,
-	}
-
-	Setup(c)
-	proxyServer := Server
+	AddProxy(apiRoute, apiPort)
+	AddProxy(frontendRoute, frontendPort)
 
 	go func() {
-		wg.Done()
-		Start()
+		Start(proxyPort)
+		defer Server.Close()
 	}()
 
 	// Fake request to api
@@ -98,6 +82,4 @@ func TestInit(t *testing.T) {
 	checkRoute(feReq2, "frontendServer", t)
 	checkRoute(feReq3, "frontendServer", t)
 
-	proxyServer.Close()
-	wg.Wait()
 }

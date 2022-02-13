@@ -9,35 +9,16 @@ import (
 	"time"
 )
 
-type Config struct {
-	PortProxy    string
-	PortApi      string
-	PortFrontend string
-	ApiRoute     string
-	ApiKey       string
-}
-
-var api *httputil.ReverseProxy
-var frontend *httputil.ReverseProxy
-var config Config
 var Server *http.Server
+var Proxies map[string]*httputil.ReverseProxy = make(map[string]*httputil.ReverseProxy)
 
-func Setup(c Config) {
-	config = c
-	createProxies(c.PortFrontend, c.PortApi)
-	Server = setupServer(c.PortProxy)
-}
-
-func createProxies(portFrontend string, portApi string) {
-	var err error
-	api, err = newProxy("http://localhost:" + portApi)
+func AddProxy(route string, port string) error {
+	p, err := newProxy("http://localhost:" + port)
 	if err != nil {
-		log.Fatal("Proxy: Error creating api handler")
+		return err
 	}
-	frontend, err = newProxy("http://localhost:" + portFrontend)
-	if err != nil {
-		log.Fatal("Proxy: Error creating frontend handler")
-	}
+	Proxies[route] = p
+	return nil
 }
 
 func setupServer(portProxy string) *http.Server {
@@ -53,21 +34,14 @@ func setupServer(portProxy string) *http.Server {
 	return srv
 }
 
-func Start() {
-	if Server == nil {
-		log.Fatal("Proxy: Server not configured. Use Setup(config) before start server.")
-	}
-	log.Println("Proxy server listening on port ", config.PortProxy)
+func Start(port string) error {
+	Server = setupServer(port)
+	log.Println("Proxy server listening on port ", port)
 	err := Server.ListenAndServe()
 	if err != nil {
-		e := err.Error()
-		log.Println(e)
-		if strings.Contains(e, "Server closed") {
-			log.Println("Proxy: server closed")
-			return
-		}
-		log.Fatalf("Proxy: Error initializing server: %s", err)
+		return err
 	}
+	return nil
 }
 
 func newProxy(targetHost string) (*httputil.ReverseProxy, error) {
@@ -79,13 +53,15 @@ func newProxy(targetHost string) (*httputil.ReverseProxy, error) {
 }
 
 func routesHandler(w http.ResponseWriter, r *http.Request) {
-	if !strings.HasPrefix(r.URL.Path, "/") {
+	if string(r.URL.Path[0]) != "/" {
 		r.URL.Path = "/" + r.URL.Path
 	}
-	if strings.HasPrefix(r.URL.Path, config.ApiRoute) {
-		r.Header.Set("x-api-key", config.ApiKey)
-		api.ServeHTTP(w, r)
-		return
+
+	route := strings.Split(r.URL.Path, "/")[1]
+
+	if _, exist := Proxies[route]; !exist {
+		route = "/" // Must be at one root proxy
 	}
-	frontend.ServeHTTP(w, r)
+
+	Proxies[route].ServeHTTP(w, r)
 }
